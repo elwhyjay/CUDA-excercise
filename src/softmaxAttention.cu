@@ -27,7 +27,7 @@ __global__ void divide_sqrt_naive(const float* input,float* output,int row,int c
     }
 }
 
-__global__ void matrix_multiplication_naive(const float* A, const float*B,float* C,int M,int N,int K,int d) {
+__global__ void matrix_multiplication_naive(const float* A, const float*B,float* C,int M,int N,int K) {
     int r = blockIdx.y * blockDim.y + threadIdx.y;
     int c = blockIdx.x * blockDim.x + threadIdx.x;
     if(r < M && c < N) {
@@ -58,6 +58,47 @@ __global__ void softmax_naive(float* scores,int M,int N,int d) {
 
 
 extern "C" void solve(const float* Q, const float* K, const float* V, float* output, int M, int N, int d) {
+    // Q: M x d
+    // K: N x d
+    // V: N x d
+    // output: M x d
+    
+    // Step 1: Transpose K (N x d) -> K^T (d x N)
+    float* K_T;
+    cudaMalloc(&K_T, N * d * sizeof(float));
+    
+    dim3 transpose_block(tile_size, tile_size);
+    dim3 transpose_grid((d + tile_size - 1) / tile_size, (N + tile_size - 1) / tile_size);
+    matrix_transpose_naive<<<transpose_grid, transpose_block>>>(K, K_T, N, d);
+    
+    // Step 2: Compute Q @ K^T -> scores (M x N)
+    // Q: M x d, K^T: d x N, scores: M x N
+    float* scores;
+    cudaMalloc(&scores, M * N * sizeof(float));
+    
+    dim3 matmul_block(tile_size, tile_size);
+    dim3 matmul_grid1((N + tile_size - 1) / tile_size, (M + tile_size - 1) / tile_size);
+    matrix_multiplication_naive<<<matmul_grid1, matmul_block>>>(Q, K_T, scores, M, d, N);
+    
+    // Step 3: Divide by sqrt(d)
+    float d_inv_sqrt = 1.0f / sqrtf((float)d);
+    int total_scores = M * N;
+    int threads = 256;
+    int blocks = (total_scores + threads - 1) / threads;
+    divide_sqrt_naive<<<blocks, threads>>>(scores, scores, M, N, d_inv_sqrt);
+    
+    // Step 4: Apply softmax row-wise
+    softmax_naive<<<M, 1>>>(scores, M, N);
+    
+    // Step 5: Compute scores @ V -> output (M x d)
+    // scores: M x N, V: N x d, output: M x d
+    dim3 matmul_grid2((d + tile_size - 1) / tile_size, (M + tile_size - 1) / tile_size);
+    matrix_multiplication_naive<<<matmul_grid2, matmul_block>>>(scores, V, output, M, N, d);
+    
+    // Cleanup
+    cudaFree(K_T);
+    cudaFree(scores);
 
+    
 
 }
