@@ -39,7 +39,7 @@ __global__ void matrix_multiplication_naive(const float* A, const float*B,float*
     } 
 }
 
-__global__ void softmax_naive(float* scores,int M,int N,int d) {
+__global__ void softmax_naive(float* scores,int M,int N) {
     int r= blockIdx.x;
     if(r>=M) return;
     float maxv = -INFINITY;
