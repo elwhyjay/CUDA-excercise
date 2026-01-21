@@ -13,7 +13,7 @@ nvcc -o main main.cu
 - [x] 1D convolution
 - [x] Gemm
 - [x] relu / leaky relu 
-- []  Prefix sum
-- [] Sorting
-- [] Categorical cross entropy
-- [] FFT
+- [ ]  Prefix sum
+- [ ] Sorting
+- [ ] Categorical cross entropy
+- [ ] FFT
